@@ -39,6 +39,10 @@ public:
   static std::unique_ptr<Platform> CreateFBDevPlatform();
 #endif
 
+#if defined(HAVE_SDL2)
+  static std::unique_ptr<Platform> CreateSDLPlatform();
+#endif
+
 #ifdef _WIN32
   static std::unique_ptr<Platform> CreateWin32Platform();
 #endif

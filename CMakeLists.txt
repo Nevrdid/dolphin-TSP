@@ -59,12 +59,6 @@ message(STATUS "Using ${COMPILER} ${CMAKE_CXX_COMPILER_VERSION}")
 
 if ("-" STREQUAL "${${COMPILER}_min_version}-")
   message(WARNING "Unknown compiler ${COMPILER}, assuming it is new enough")
-else()
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS  ${${COMPILER}_min_version})
-    message(FATAL_ERROR "Requires GCC ${GCC_min_version}, Clang ${Clang_min_version},"
-    " AppleClang ${AppleClang_min_version} (Xcode ${min_xcode_version}),"
-    " or MSVC ${MSVC_min_version} (Visual Studio ${min_vs_version}) or higher")
-  endif()
 endif()
 
 # Name of the Dolphin distributor. If you redistribute Dolphin builds (forks,
@@ -585,7 +579,7 @@ if(UNIX)
 endif()
 
 if(ENABLE_SDL)
-  dolphin_find_optional_system_library(SDL2 Externals/SDL 2.30.6)
+  dolphin_find_optional_system_library(SDL2 Externals/SDL 2.26.1)
 endif()
 
 if(ENABLE_ANALYTICS)

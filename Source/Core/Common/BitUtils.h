@@ -14,6 +14,25 @@
 
 namespace Common
 {
+template <typename To, typename From>
+constexpr To BitCast(const From& src) {
+    static_assert(sizeof(To) == sizeof(From), "Size of source and destination must be the same");
+
+    union {
+        From from;
+        To to;
+    } u = { src };
+
+    return u.to;
+}
+// template <typename To, typename From>
+// To BitCast(const From& src) {
+//     static_assert(sizeof(To) == sizeof(From), "Size of source and destination must be the same");
+//     To dst;
+//     std::memcpy(&dst, &src, sizeof(To));
+//     return dst;
+// }
+
 ///
 /// Retrieves the size of a type in bits.
 ///
@@ -170,7 +189,7 @@ inline auto BitCastPtr(PtrType* ptr) noexcept -> BitCastPtrType<T, PtrType>
 template <typename ValueType, typename From>
 [[nodiscard]] constexpr auto BitCastToArray(const From& obj) noexcept
 {
-  return std::bit_cast<std::array<ValueType, sizeof(From) / sizeof(ValueType)>>(obj);
+  return Common::BitCastToArray<std::array<ValueType, sizeof(From) / sizeof(ValueType)>>(obj);
 }
 
 template <typename T>

@@ -1,6 +1,8 @@
 // Copyright 2016 Dolphin Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "Core/ConfigManager.h"
+
 #include "VideoBackends/Vulkan/VideoBackend.h"
 
 #include <vector>
@@ -24,6 +26,11 @@
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 
+#if defined(HAVE_SDL2)
+#include <SDL.h>
+#include <SDL_vulkan.h>
+#endif
+
 #if defined(VK_USE_PLATFORM_METAL_EXT)
 #include <objc/message.h>
 #endif
@@ -36,9 +43,10 @@ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
 
   if (LoadVulkanLibrary())
   {
+    std::vector<const char*> extension_list;
     u32 vk_api_version = 0;
     VkInstance temp_instance = VulkanContext::CreateVulkanInstance(WindowSystemType::Headless,
-                                                                   false, false, &vk_api_version);
+                                                                   false, false, &vk_api_version, extension_list);
     if (temp_instance)
     {
       if (LoadVulkanInstanceFunctions(temp_instance))
@@ -114,8 +122,32 @@ bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
   bool enable_surface = wsi.type != WindowSystemType::Headless;
   bool enable_debug_utils = ShouldEnableDebugUtils(enable_validation_layer);
   u32 vk_api_version = 0;
+
+  std::vector<const char*> extension_list;
+
+  if (wsi.type == WindowSystemType::SDL)
+  {
+    unsigned int extension_count = 0;
+    if (!SDL_Vulkan_GetInstanceExtensions(reinterpret_cast<SDL_Window*>(wsi.render_surface), &extension_count, nullptr)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"SDL_Vulkan_GetInstanceExtensions failed:%s ", SDL_GetError());
+        return false;
+    }
+
+    std::vector<const char*> extensions(extension_count);
+    if (!SDL_Vulkan_GetInstanceExtensions(reinterpret_cast<SDL_Window*>(wsi.render_surface), &extension_count, extensions.data())) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"SDL_Vulkan_GetInstanceExtensions failed:%s ", SDL_GetError());
+        return false;
+    }
+
+    // Push back to extension_list
+    for (const char* extension : extensions)
+    {
+      extension_list.push_back(extension);
+    }
+  }
+
   VkInstance instance = VulkanContext::CreateVulkanInstance(
-      wsi.type, enable_debug_utils, enable_validation_layer, &vk_api_version);
+      wsi.type, enable_debug_utils, enable_validation_layer, &vk_api_version, extension_list);
   if (instance == VK_NULL_HANDLE)
   {
     PanicAlertFmt("Failed to create Vulkan instance.");

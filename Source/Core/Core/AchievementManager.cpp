@@ -387,8 +387,7 @@ void AchievementManager::FilterApprovedPatches(std::vector<PatchEngine::Patch>& 
 {
   if (patches.empty())
   {
-    // There's nothing to verify, so let's save ourselves some work
-    return;
+    return;  // No patches to verify
   }
 
   std::lock_guard lg{m_lock};
@@ -408,15 +407,30 @@ void AchievementManager::FilterApprovedPatches(std::vector<PatchEngine::Patch>& 
     if (known_id)
     {
       auto context = Common::SHA1::CreateContext();
-      context->Update(Common::BitCastToArray<u8>(static_cast<u64>(patch_itr->entries.size())));
+
+      // Update with size of entries
+      auto size_as_u64 = Common::BitCast<u64>(static_cast<u64>(patch_itr->entries.size()));
+      context->Update(reinterpret_cast<u8*>(&size_as_u64), sizeof(size_as_u64));
+
       for (const auto& entry : patch_itr->entries)
       {
-        context->Update(Common::BitCastToArray<u8>(entry.type));
-        context->Update(Common::BitCastToArray<u8>(entry.address));
-        context->Update(Common::BitCastToArray<u8>(entry.value));
-        context->Update(Common::BitCastToArray<u8>(entry.comparand));
-        context->Update(Common::BitCastToArray<u8>(entry.conditional));
+        // Convert each entry field to its u8 array representation and update context
+        auto type_as_u32 = Common::BitCast<u32>(entry.type);
+        context->Update(reinterpret_cast<u8*>(&type_as_u32), sizeof(type_as_u32));
+
+        auto address_as_u64 = Common::BitCast<u64>(entry.address);
+        context->Update(reinterpret_cast<u8*>(&address_as_u64), sizeof(address_as_u64));
+
+        auto value_as_u64 = Common::BitCast<u64>(entry.value);
+        context->Update(reinterpret_cast<u8*>(&value_as_u64), sizeof(value_as_u64));
+
+        auto comparand_as_u64 = Common::BitCast<u64>(entry.comparand);
+        context->Update(reinterpret_cast<u8*>(&comparand_as_u64), sizeof(comparand_as_u64));
+
+        auto conditional_as_u32 = Common::BitCast<u32>(entry.conditional);
+        context->Update(reinterpret_cast<u8*>(&conditional_as_u32), sizeof(conditional_as_u32));
       }
+
       auto digest = context->Finish();
 
       verified = m_ini_root->get(game_ini_id).contains(Common::SHA1::DigestToString(digest));
@@ -433,11 +447,66 @@ void AchievementManager::FilterApprovedPatches(std::vector<PatchEngine::Patch>& 
     }
     else
     {
-      patch_itr++;
+      ++patch_itr;
     }
   }
 }
-
+// void AchievementManager::FilterApprovedPatches(std::vector<PatchEngine::Patch>& patches,
+//                                                const std::string& game_ini_id) const
+// {
+//   if (patches.empty())
+//   {
+//     // There's nothing to verify, so let's save ourselves some work
+//     return;
+//   }
+//
+//   std::lock_guard lg{m_lock};
+//
+//   if (!IsHardcoreModeActive())
+//     return;
+//
+//   const bool known_id = m_ini_root->contains(game_ini_id);
+//
+//   auto patch_itr = patches.begin();
+//   while (patch_itr != patches.end())
+//   {
+//     INFO_LOG_FMT(ACHIEVEMENTS, "Verifying patch {}", patch_itr->name);
+//
+//     bool verified = false;
+//
+//     if (known_id)
+//     {
+//       auto context = Common::SHA1::CreateContext();
+//       context->Update(Common::BitCastToArray<u8>(static_cast<u64>(patch_itr->entries.size())));
+//       for (const auto& entry : patch_itr->entries)
+//       {
+//         context->Update(Common::BitCastToArray<u8>(entry.type));
+//         context->Update(Common::BitCastToArray<u8>(entry.address));
+//         context->Update(Common::BitCastToArray<u8>(entry.value));
+//         context->Update(Common::BitCastToArray<u8>(entry.comparand));
+//         context->Update(Common::BitCastToArray<u8>(entry.conditional));
+//       }
+//       auto digest = context->Finish();
+//
+//       verified = m_ini_root->get(game_ini_id).contains(Common::SHA1::DigestToString(digest));
+//     }
+//
+//     if (!verified)
+//     {
+//       patch_itr = patches.erase(patch_itr);
+//       OSD::AddMessage(
+//           fmt::format("Failed to verify patch {} from file {}.", patch_itr->name, game_ini_id),
+//           OSD::Duration::VERY_LONG, OSD::Color::RED);
+//       OSD::AddMessage("Disable hardcore mode to enable this patch.", OSD::Duration::VERY_LONG,
+//                       OSD::Color::RED);
+//     }
+//     else
+//     {
+//       patch_itr++;
+//     }
+//   }
+// }
+//
 void AchievementManager::SetSpectatorMode()
 {
   rc_client_set_spectator_mode_enabled(m_client, Config::Get(Config::RA_SPECTATOR_ENABLED));

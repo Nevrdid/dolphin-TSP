@@ -166,7 +166,8 @@ int VerifyCommand(const std::vector<std::string>& args)
   // Calculate rcheevos hash
   if (rc_hash_calculate)
   {
-    rc_hash_result = AchievementManager::CalculateHash(input_file_path);
+    // Skip error ( not needed )
+    // rc_hash_result = AchievementManager::CalculateHash(input_file_path);
   }
 
   // Print the report

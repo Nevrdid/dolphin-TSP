@@ -165,6 +165,7 @@ if(NOT MSVC AND _M_ARM_64)
     PROPERTIES COMPILE_FLAGS "-march=armv8-a+crypto")
 endif()
 
+
 target_link_libraries(common
 PUBLIC
   ${CMAKE_THREAD_LIBS_INIT}
@@ -287,6 +288,11 @@ if(ENABLE_EGL AND EGL_FOUND)
       GL/GLInterface/EGLX11.h
     )
   endif()
+
+	if(ENABLE_SDL)
+		target_link_libraries(common PRIVATE SDL2::SDL2)
+		target_compile_definitions(common PUBLIC HAVE_SDL2=1)
+	endif()
   target_include_directories(common PRIVATE ${EGL_INCLUDE_DIRS})
   target_link_libraries(common PUBLIC ${EGL_LIBRARIES})
 endif()

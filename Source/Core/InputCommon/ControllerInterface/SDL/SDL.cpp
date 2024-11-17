@@ -426,17 +426,6 @@ static void EnableSDLLogging()
 InputBackend::InputBackend(ControllerInterface* controller_interface)
     : ciface::InputBackend(controller_interface)
 {
-  EnableSDLLogging();
-
-  // This is required on windows so that SDL's joystick code properly pumps window messages
-  SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");
-
-  SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
-  // We want buttons to come in as positions, not labels
-  SDL_SetHint(SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "0");
-
-  // Disable DualSense Player LEDs; We already colorize the Primary LED
-  SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_PLAYER_LED, "0");
 
   m_hotplug_thread = std::thread([this] {
     Common::ScopeGuard quit_guard([] {
@@ -446,10 +435,24 @@ InputBackend::InputBackend(ControllerInterface* controller_interface)
     {
       Common::ScopeGuard init_guard([this] { m_init_event.Set(); });
 
-      if (SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC | SDL_INIT_GAMECONTROLLER) != 0)
+      // Skip init if SDL has already been initialized
+      if (SDL_WasInit(0) == 0)
       {
-        ERROR_LOG_FMT(CONTROLLERINTERFACE, "SDL failed to initialize");
-        return;
+        EnableSDLLogging();
+        // This is required on windows so that SDL's joystick code properly pumps window messages
+        SDL_SetHint(SDL_HINT_JOYSTICK_THREAD, "1");
+
+        SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
+        // We want buttons to come in as positions, not labels
+        SDL_SetHint(SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "0");
+
+        // Disable DualSense Player LEDs; We already colorize the Primary LED
+        SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_PLAYER_LED, "0");
+        if (SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC | SDL_INIT_GAMECONTROLLER) != 0)
+        {
+          ERROR_LOG_FMT(CONTROLLERINTERFACE, "SDL failed to initialize");
+          return;
+        }
       }
 
       const Uint32 custom_events_start = SDL_RegisterEvents(2);

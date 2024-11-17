@@ -8,6 +8,11 @@
 #include <sstream>
 #include <vector>
 
+#ifdef ENABLE_SDL
+#include <SDL.h>
+#include <SDL_vulkan.h>
+#endif
+
 #include "Common/Logging/Log.h"
 
 #ifndef EGL_KHR_create_context
@@ -29,8 +34,17 @@
 
 GLContextEGL::~GLContextEGL()
 {
-  DestroyWindowSurface();
-  DestroyContext();
+  if (m_sdl_window)
+  {
+    if (m_egl_context)
+      SDL_GL_DeleteContext(m_egl_context);
+    SDL_Quit();
+  }
+  else
+  {
+    DestroyWindowSurface();
+    DestroyContext();
+  }
 }
 
 bool GLContextEGL::IsHeadless() const
@@ -138,14 +152,48 @@ EGLNativeWindowType GLContextEGL::GetEGLNativeWindow(EGLConfig config)
   return reinterpret_cast<EGLNativeWindowType>(m_wsi.display_connection);
 }
 
-// Create rendering window.
-// Call browser: Core.cpp:EmuThread() > main.cpp:Video_Initialize()
 bool GLContextEGL::Initialize(const WindowSystemInfo& wsi, bool stereo, bool core)
 {
   EGLint egl_major, egl_minor;
   bool supports_core_profile = false;
 
   m_wsi = wsi;
+
+  // If the platform is SDL, handle SDL initialization.
+  if (m_wsi.type == WindowSystemType::SDL)
+  {
+    // Create SDL window with OpenGL or OpenGL ES flags
+    if (stereo)
+    {
+        if (SDL_GL_SetAttribute(SDL_GL_STEREO, 1) != 0)
+        {
+            INFO_LOG_FMT(VIDEO, "Warning: SDL_GL_STEREO not supported: {}", SDL_GetError());
+        }
+    }
+
+    // Set SDL OpenGL attributes for GLES if required
+    if (m_opengl_mode == Mode::OpenGLES)
+    {
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3); // GLES3
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    }
+    else // Default to desktop OpenGL
+    {
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    }
+    m_sdl_window = reinterpret_cast<SDL_Window*>(wsi.render_surface);
+    m_egl_context = SDL_GL_CreateContext(m_sdl_window);
+    if (!m_egl_context)
+    {
+      INFO_LOG_FMT(VIDEO, "Error: SDL_GL_CreateContext failed: {}", SDL_GetError());
+      return false;
+    }
+
+    return MakeCurrent(); // SDL handles MakeCurrent internally.
+  }
+
+  // Fallback to regular EGL initialization for non-SDL platforms.
   m_egl_display = OpenEGLDisplay();
   if (!m_egl_display)
   {
@@ -159,92 +207,42 @@ bool GLContextEGL::Initialize(const WindowSystemInfo& wsi, bool stereo, bool cor
     return false;
   }
 
-  /* Detection code */
-  EGLint num_configs;
-
+  // Detect rendering mode (OpenGL or OpenGL ES)
   if (m_opengl_mode == Mode::Detect)
     DetectMode();
 
-  // attributes for a visual in RGBA format with at least
-  // 8 bits per color
-  int attribs[] = {EGL_RENDERABLE_TYPE,
-                   0,
-                   EGL_RED_SIZE,
-                   8,
-                   EGL_GREEN_SIZE,
-                   8,
-                   EGL_BLUE_SIZE,
-                   8,
-                   EGL_SURFACE_TYPE,
-                   IsHeadless() ? 0 : EGL_WINDOW_BIT,
-                   EGL_NONE};
+  // Setup EGL attributes
+  EGLint attribs[] = {EGL_RENDERABLE_TYPE, 0, EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8,
+                      EGL_BLUE_SIZE,      8, EGL_SURFACE_TYPE, IsHeadless() ? 0 : EGL_WINDOW_BIT,
+                      EGL_NONE};
 
   std::vector<EGLint> ctx_attribs;
-  switch (m_opengl_mode)
+  if (m_opengl_mode == Mode::OpenGL)
   {
-  case Mode::OpenGL:
     attribs[1] = EGL_OPENGL_BIT;
     ctx_attribs = {EGL_NONE};
-    break;
-  case Mode::OpenGLES:
+  }
+  else if (m_opengl_mode == Mode::OpenGLES)
+  {
     attribs[1] = EGL_OPENGL_ES3_BIT_KHR;
     ctx_attribs = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-    break;
-  default:
-    ERROR_LOG_FMT(VIDEO, "Unknown opengl mode set");
-    return false;
   }
-
-  if (!eglChooseConfig(m_egl_display, attribs, &m_config, 1, &num_configs))
-  {
-    INFO_LOG_FMT(VIDEO, "Error: couldn't get an EGL visual config");
-    return false;
-  }
-
-  if (m_opengl_mode == Mode::OpenGL)
-    eglBindAPI(EGL_OPENGL_API);
   else
-    eglBindAPI(EGL_OPENGL_ES_API);
-
-  std::string tmp;
-  std::istringstream buffer(eglQueryString(m_egl_display, EGL_EXTENSIONS));
-  while (buffer >> tmp)
   {
-    if (tmp == "EGL_KHR_surfaceless_context")
-      m_supports_surfaceless = true;
-    else if (tmp == "EGL_KHR_create_context")
-      supports_core_profile = true;
+    ERROR_LOG_FMT(VIDEO, "Unknown OpenGL mode set");
+    return false;
   }
 
-  if (supports_core_profile && core && m_opengl_mode == Mode::OpenGL)
+  // Choose configuration and create context
+  if (!eglChooseConfig(m_egl_display, attribs, &m_config, 1, nullptr))
   {
-    for (const auto& version : s_desktop_opengl_versions)
-    {
-      std::vector<EGLint> core_attribs = {EGL_CONTEXT_MAJOR_VERSION_KHR,
-                                          version.first,
-                                          EGL_CONTEXT_MINOR_VERSION_KHR,
-                                          version.second,
-                                          EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR,
-                                          EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR,
-                                          EGL_CONTEXT_FLAGS_KHR,
-                                          EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR,
-                                          EGL_NONE};
-
-      m_egl_context = eglCreateContext(m_egl_display, m_config, EGL_NO_CONTEXT, &core_attribs[0]);
-      if (m_egl_context)
-      {
-        m_attribs = std::move(core_attribs);
-        break;
-      }
-    }
+    INFO_LOG_FMT(VIDEO, "Error: eglChooseConfig failed");
+    return false;
   }
 
-  if (!m_egl_context)
-  {
-    m_egl_context = eglCreateContext(m_egl_display, m_config, EGL_NO_CONTEXT, &ctx_attribs[0]);
-    m_attribs = std::move(ctx_attribs);
-  }
+  eglBindAPI(m_opengl_mode == Mode::OpenGL ? EGL_OPENGL_API : EGL_OPENGL_ES_API);
 
+  m_egl_context = eglCreateContext(m_egl_display, m_config, EGL_NO_CONTEXT, ctx_attribs.data());
   if (!m_egl_context)
   {
     INFO_LOG_FMT(VIDEO, "Error: eglCreateContext failed");
@@ -259,6 +257,162 @@ bool GLContextEGL::Initialize(const WindowSystemInfo& wsi, bool stereo, bool cor
 
   return MakeCurrent();
 }
+
+//
+// // Create rendering window.
+// // Call browser: Core.cpp:EmuThread() > main.cpp:Video_Initialize()
+// bool GLContextEGL::Initialize(const WindowSystemInfo& wsi, bool stereo, bool core)
+// {
+//   EGLint egl_major, egl_minor;
+//   bool supports_core_profile = false;
+//
+//   m_wsi = wsi;
+//
+//   // If the platform is SDL, use SDL initialization.
+//   if (m_wsi.type == WindowSystemType::SDL)
+//   {
+//     if (SDL_Init(SDL_INIT_VIDEO) != 0)
+//     {
+//       INFO_LOG_FMT(VIDEO, "Error: SDL_Init failed: {}", SDL_GetError());
+//       return false;
+//     }
+//
+//     // Create SDL window with OpenGL flags
+//     Uint32 window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN;
+//     if (stereo)
+//       window_flags |= SDL_WINDOW_OPENGL_STEREO;
+//
+//     m_sdl_window = SDL_CreateWindow("OpenGL SDL Window", SDL_WINDOWPOS_CENTERED,
+//                                     SDL_WINDOWPOS_CENTERED, 800, 600, window_flags);
+//     if (!m_sdl_window)
+//     {
+//       INFO_LOG_FMT(VIDEO, "Error: SDL_CreateWindow failed: {}", SDL_GetError());
+//       return false;
+//     }
+//
+//     m_egl_context = SDL_GL_CreateContext(m_sdl_window);
+//     if (!m_egl_context)
+//     {
+//       INFO_LOG_FMT(VIDEO, "Error: SDL_GL_CreateContext failed: {}", SDL_GetError());
+//       return false;
+//     }
+//
+//     return MakeCurrent(); // SDL handles MakeCurrent internally.
+//   }
+//
+//   m_egl_display = OpenEGLDisplay();
+//   if (!m_egl_display)
+//   {
+//     INFO_LOG_FMT(VIDEO, "Error: eglGetDisplay() failed");
+//     return false;
+//   }
+//
+//   if (!eglInitialize(m_egl_display, &egl_major, &egl_minor))
+//   {
+//     INFO_LOG_FMT(VIDEO, "Error: eglInitialize() failed");
+//     return false;
+//   }
+//
+//   /* Detection code */
+//   EGLint num_configs;
+//
+//   if (m_opengl_mode == Mode::Detect)
+//     DetectMode();
+//
+//   // attributes for a visual in RGBA format with at least
+//   // 8 bits per color
+//   int attribs[] = {EGL_RENDERABLE_TYPE,
+//                    0,
+//                    EGL_RED_SIZE,
+//                    8,
+//                    EGL_GREEN_SIZE,
+//                    8,
+//                    EGL_BLUE_SIZE,
+//                    8,
+//                    EGL_SURFACE_TYPE,
+//                    IsHeadless() ? 0 : EGL_WINDOW_BIT,
+//                    EGL_NONE};
+//
+//   std::vector<EGLint> ctx_attribs;
+//   switch (m_opengl_mode)
+//   {
+//   case Mode::OpenGL:
+//     attribs[1] = EGL_OPENGL_BIT;
+//     ctx_attribs = {EGL_NONE};
+//     break;
+//   case Mode::OpenGLES:
+//     attribs[1] = EGL_OPENGL_ES3_BIT_KHR;
+//     ctx_attribs = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+//     break;
+//   default:
+//     ERROR_LOG_FMT(VIDEO, "Unknown opengl mode set");
+//     return false;
+//   }
+//
+//   if (!eglChooseConfig(m_egl_display, attribs, &m_config, 1, &num_configs))
+//   {
+//     INFO_LOG_FMT(VIDEO, "Error: couldn't get an EGL visual config");
+//     return false;
+//   }
+//
+//   if (m_opengl_mode == Mode::OpenGL)
+//     eglBindAPI(EGL_OPENGL_API);
+//   else
+//     eglBindAPI(EGL_OPENGL_ES_API);
+//
+//   std::string tmp;
+//   std::istringstream buffer(eglQueryString(m_egl_display, EGL_EXTENSIONS));
+//   while (buffer >> tmp)
+//   {
+//     if (tmp == "EGL_KHR_surfaceless_context")
+//       m_supports_surfaceless = true;
+//     else if (tmp == "EGL_KHR_create_context")
+//       supports_core_profile = true;
+//   }
+//
+//   if (supports_core_profile && core && m_opengl_mode == Mode::OpenGL)
+//   {
+//     for (const auto& version : s_desktop_opengl_versions)
+//     {
+//       std::vector<EGLint> core_attribs = {EGL_CONTEXT_MAJOR_VERSION_KHR,
+//                                           version.first,
+//                                           EGL_CONTEXT_MINOR_VERSION_KHR,
+//                                           version.second,
+//                                           EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR,
+//                                           EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR,
+//                                           EGL_CONTEXT_FLAGS_KHR,
+//                                           EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE_BIT_KHR,
+//                                           EGL_NONE};
+//
+//       m_egl_context = eglCreateContext(m_egl_display, m_config, EGL_NO_CONTEXT, &core_attribs[0]);
+//       if (m_egl_context)
+//       {
+//         m_attribs = std::move(core_attribs);
+//         break;
+//       }
+//     }
+//   }
+//
+//   if (!m_egl_context)
+//   {
+//     m_egl_context = eglCreateContext(m_egl_display, m_config, EGL_NO_CONTEXT, &ctx_attribs[0]);
+//     m_attribs = std::move(ctx_attribs);
+//   }
+//
+//   if (!m_egl_context)
+//   {
+//     INFO_LOG_FMT(VIDEO, "Error: eglCreateContext failed");
+//     return false;
+//   }
+//
+//   if (!CreateWindowSurface())
+//   {
+//     ERROR_LOG_FMT(VIDEO, "Error: CreateWindowSurface failed {:#06x}", eglGetError());
+//     return false;
+//   }
+//
+//   return MakeCurrent();
+// }
 
 std::unique_ptr<GLContext> GLContextEGL::CreateSharedContext()
 {

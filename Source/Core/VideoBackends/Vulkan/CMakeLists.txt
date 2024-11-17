@@ -55,6 +55,11 @@ if (ANDROID AND _M_ARM_64)
   )
 endif()
 
+if (ENABLE_SDL)
+  target_link_libraries(videovulkan PRIVATE SDL2::SDL2)
+  target_compile_definitions(videovulkan PUBLIC HAVE_SDL2=1)
+endif()
+
 # Only include the Vulkan headers when building the Vulkan backend
 target_include_directories(videovulkan
 PRIVATE

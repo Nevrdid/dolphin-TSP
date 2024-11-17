@@ -11,6 +11,7 @@
 #include "Core/HW/Memmap.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/System.h"
+#include "Common/BitUtils.h"
 
 namespace AddressSpace
 {
@@ -55,7 +56,7 @@ void Accessors::WriteU64(const Core::CPUThreadGuard& guard, u32 address, u64 val
 
 float Accessors::ReadF32(const Core::CPUThreadGuard& guard, u32 address) const
 {
-  return std::bit_cast<float>(ReadU32(guard, address));
+  return Common::BitCast<float>(ReadU32(guard, address));
 }
 
 Accessors::iterator Accessors::begin() const

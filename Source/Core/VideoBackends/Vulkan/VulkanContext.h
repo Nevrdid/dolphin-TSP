@@ -63,8 +63,7 @@ public:
   static bool CheckValidationLayerAvailablility();
 
   // Helper method to create a Vulkan instance.
-  static VkInstance CreateVulkanInstance(WindowSystemType wstype, bool enable_debug_utils,
-                                         bool enable_validation_layer, u32* out_vk_api_version);
+  static VkInstance CreateVulkanInstance(WindowSystemType wstype, bool enable_debug_utils, bool enable_validation_layer, u32* out_vk_api_version, std::vector<const char*> &enabled_extensions);
 
   // Returns a list of Vulkan-compatible GPUs.
   using GPUList = std::vector<VkPhysicalDevice>;

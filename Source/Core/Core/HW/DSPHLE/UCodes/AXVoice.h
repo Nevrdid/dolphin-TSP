@@ -56,25 +56,53 @@ PBUpdateData LoadPBUpdates(Memory::MemoryManager& memory, const PB_TYPE& pb)
   return updates;
 }
 
-// Apply updates to a PB.
 void ApplyUpdatesForMs(int curr_ms, PB_TYPE& pb, u16* num_updates, const PBUpdateData& updates)
 {
-  auto pb_mem = Common::BitCastToArray<u16>(pb);
+  // Ensure pb_mem has enough space to store PB_TYPE as an array of u16
+  std::array<u16, sizeof(PB_TYPE) / sizeof(u16)> pb_mem;
+  static_assert(sizeof(PB_TYPE) % sizeof(u16) == 0, "PB_TYPE size must be multiple of u16");
+
+  // Copy pb into pb_mem buffer
+  std::memcpy(pb_mem.data(), &pb, sizeof(pb));
 
   u32 start_idx = 0;
   for (int i = 0; i < curr_ms; ++i)
     start_idx += num_updates[i];
 
+  // Perform the updates in the pb_mem array
   for (u32 i = start_idx; i < start_idx + num_updates[curr_ms]; ++i)
   {
     u16 update_off = updates[i].pb_offset;
     u16 update_val = updates[i].new_value;
 
-    pb_mem[update_off] = update_val;
+    // Ensure we are within bounds
+    if (update_off < pb_mem.size())
+      pb_mem[update_off] = update_val;
   }
 
-  pb = std::bit_cast<PB_TYPE>(pb_mem);
+  // Copy pb_mem back to pb
+  std::memcpy(&pb, pb_mem.data(), sizeof(pb));
 }
+//
+// // Apply updates to a PB.
+// void ApplyUpdatesForMs(int curr_ms, PB_TYPE& pb, u16* num_updates, const PBUpdateData& updates)
+// {
+//   auto pb_mem = Common::BitCastToArray<u16>(pb);
+//
+//   u32 start_idx = 0;
+//   for (int i = 0; i < curr_ms; ++i)
+//     start_idx += num_updates[i];
+//
+//   for (u32 i = start_idx; i < start_idx + num_updates[curr_ms]; ++i)
+//   {
+//     u16 update_off = updates[i].pb_offset;
+//     u16 update_val = updates[i].new_value;
+//
+//     pb_mem[update_off] = update_val;
+//   }
+//
+//   pb = std::bit_cast<PB_TYPE>(pb_mem);
+// }
 
 // Used to pass a large amount of buffers to the mixing function.
 union AXBuffers

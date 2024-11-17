@@ -647,9 +647,23 @@ std::string GameFile::GetNetPlayName(const Core::TitleDatabase& title_database) 
 
 static Common::SHA1::Digest GetHash(u32 value)
 {
-  auto data = Common::BitCastToArray<u8>(value);
-  return Common::SHA1::CalculateDigest(data);
+    // Create a byte array from the 32-bit value
+    std::array<u8, sizeof(u32)> data;
+
+    // Convert the integer value to bytes (assuming little-endian format)
+    for (size_t i = 0; i < sizeof(u32); ++i)
+    {
+        data[i] = static_cast<u8>(value >> (i * 8));
+    }
+
+    // Now you can calculate the SHA1 digest from the byte array
+    return Common::SHA1::CalculateDigest(data);
 }
+// static Common::SHA1::Digest GetHash(u32 value)
+// {
+//   auto data = Common::BitCastToArray<u8>(value);
+//   return Common::SHA1::CalculateDigest(data);
+// }
 
 static Common::SHA1::Digest GetHash(std::string_view str)
 {

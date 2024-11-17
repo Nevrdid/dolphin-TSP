@@ -125,7 +125,7 @@ static std::optional<u32> inet_pton(const char* src)
   }
   if (octets < 4)
     return std::nullopt;
-  return std::bit_cast<u32>(tmp);
+  return Common::BitCast<u32>(tmp);
 }
 
 // Maps SOCKOPT level from Wii to native
@@ -204,9 +204,9 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
     for (const auto& entry : table)
     {
       routing_table.emplace_back(entry.dwForwardIfIndex,
-                                 std::bit_cast<in_addr>(entry.dwForwardDest),
-                                 std::bit_cast<in_addr>(entry.dwForwardMask),
-                                 std::bit_cast<in_addr>(entry.dwForwardNextHop));
+                                 Common::BitCast<in_addr>(entry.dwForwardDest),
+                                 Common::BitCast<in_addr>(entry.dwForwardMask),
+                                 Common::BitCast<in_addr>(entry.dwForwardNextHop));
     }
 
     if (result == NO_ERROR)
@@ -376,9 +376,9 @@ static std::optional<DefaultInterface> GetSystemDefaultInterface()
       const auto& entry = ip_table->table[i];
       if (entry.dwIndex == if_index)
       {
-        return DefaultInterface{std::bit_cast<in_addr>(entry.dwAddr),
-                                std::bit_cast<in_addr>(entry.dwMask),
-                                std::bit_cast<in_addr>(entry.dwBCastAddr), routing_table};
+        return DefaultInterface{Common::BitCast<in_addr>(entry.dwAddr),
+                                Common::BitCast<in_addr>(entry.dwMask),
+                                Common::BitCast<in_addr>(entry.dwBCastAddr), routing_table};
       }
     }
   }
@@ -447,10 +447,10 @@ static std::optional<DefaultInterface> GetSystemDefaultInterface()
 
 static DefaultInterface GetSystemDefaultInterfaceOrFallback()
 {
-  static const in_addr FALLBACK_IP = std::bit_cast<in_addr>(inet_addr("10.0.1.30"));
-  static const in_addr FALLBACK_NETMASK = std::bit_cast<in_addr>(inet_addr("255.255.255.0"));
-  static const in_addr FALLBACK_BROADCAST = std::bit_cast<in_addr>(inet_addr("10.0.1.255"));
-  static const in_addr FALLBACK_GATEWAY = std::bit_cast<in_addr>(inet_addr("10.0.1.1"));
+  static const in_addr FALLBACK_IP = Common::BitCast<in_addr>(inet_addr("10.0.1.30"));
+  static const in_addr FALLBACK_NETMASK = Common::BitCast<in_addr>(inet_addr("255.255.255.0"));
+  static const in_addr FALLBACK_BROADCAST = Common::BitCast<in_addr>(inet_addr("10.0.1.255"));
+  static const in_addr FALLBACK_GATEWAY = Common::BitCast<in_addr>(inet_addr("10.0.1.1"));
   static const InterfaceRouting FALLBACK_ROUTING = {.gateway = FALLBACK_GATEWAY};
   static const DefaultInterface FALLBACK_VALUES = {
       FALLBACK_IP, FALLBACK_NETMASK, FALLBACK_BROADCAST, {FALLBACK_ROUTING}};

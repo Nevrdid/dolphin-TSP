@@ -17,6 +17,13 @@
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoCommon/Present.h"
 
+#if defined(HAVE_SDL2)
+#include <SDL.h>
+#include <SDL_vulkan.h>
+#endif
+
+#define VK_NO_PROTOTYPES
+
 #if defined(VK_USE_PLATFORM_XLIB_KHR)
 #include <X11/Xlib.h>
 #endif
@@ -124,6 +131,16 @@ VkSurfaceKHR SwapChain::CreateVulkanSurface(VkInstance instance, const WindowSys
     return surface;
   }
 #endif
+
+  VkSurfaceKHR surface;
+  if (!SDL_Vulkan_CreateSurface(static_cast<SDL_Window*>(wsi.render_surface), instance, &surface))
+  {
+        LOG_VULKAN_ERROR(VK_ERROR_INITIALIZATION_FAILED, "SDL_Vulkan_CreateSurface failed: ");
+        return VK_NULL_HANDLE;
+  }
+  return surface;
+
+
 
   return VK_NULL_HANDLE;
 }

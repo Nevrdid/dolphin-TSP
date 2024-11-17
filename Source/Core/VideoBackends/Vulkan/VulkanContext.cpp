@@ -227,11 +227,8 @@ static u32 getAPIVersion()
   return used_version;
 }
 
-VkInstance VulkanContext::CreateVulkanInstance(WindowSystemType wstype, bool enable_debug_utils,
-                                               bool enable_validation_layer,
-                                               u32* out_vk_api_version)
+VkInstance VulkanContext::CreateVulkanInstance(WindowSystemType wstype, bool enable_debug_utils, bool enable_validation_layer, u32* out_vk_api_version, std::vector<const char*> &enabled_extensions)
 {
-  std::vector<const char*> enabled_extensions;
   if (!SelectInstanceExtensions(&enabled_extensions, wstype, enable_debug_utils,
                                 enable_validation_layer))
     return VK_NULL_HANDLE;

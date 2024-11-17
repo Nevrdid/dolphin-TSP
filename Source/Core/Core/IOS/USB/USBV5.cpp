@@ -213,18 +213,32 @@ void USBV5ResourceManager::OnDeviceChange(const ChangeEvent event,
   {
     for (const auto& interface : device->GetInterfaces(0))
     {
+
       if (interface.bAlternateSetting != 0)
         continue;
 
-      auto it = std::ranges::find_if(m_usbv5_devices | std::views::reverse,
-                                     [](const USBV5Device& entry) { return !entry.in_use; });
+      auto it = std::find_if(m_usbv5_devices.rbegin(), m_usbv5_devices.rend(),
+                            [](const USBV5Device& entry) { return !entry.in_use; });
+
       if (it == m_usbv5_devices.rend())
-        return;
+          return;
 
       it->in_use = true;
       it->interface_number = interface.bInterfaceNumber;
       it->number = m_current_device_number;
       it->host_id = host_device_id;
+
+      // cpp20 version
+      // auto it = std::ranges::find_if(m_usbv5_devices | std::views::reverse,
+      //                                [](const USBV5Device& entry) { return !entry.in_use; });
+      // TODO: Need fix ( wrong type error, may need newer c++)
+      // if (it == m_usbv5_devices.rend())
+      //   return;
+      //
+      // it->in_use = true;
+      // it->interface_number = interface.bInterfaceNumber;
+      // it->number = m_current_device_number;
+      // it->host_id = host_device_id;
     }
   }
   else if (event == ChangeEvent::Removed)

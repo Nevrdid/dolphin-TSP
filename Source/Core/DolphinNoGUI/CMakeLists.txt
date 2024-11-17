@@ -23,6 +23,12 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   target_sources(dolphin-nogui PRIVATE PlatformFBDev.cpp)
 endif()
 
+if(ENABLE_SDL)
+	target_sources(dolphin-nogui PRIVATE PlatformSDL.cpp)
+  target_link_libraries(dolphin-nogui PRIVATE SDL2::SDL2)
+  target_compile_definitions(dolphin-nogui PUBLIC HAVE_SDL2=1)
+endif()
+
 set_target_properties(dolphin-nogui PROPERTIES OUTPUT_NAME dolphin-emu-nogui)
 
 target_link_libraries(dolphin-nogui

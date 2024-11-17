@@ -343,7 +343,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleTCPFrame(const Common::TCPPacket& 
   const auto& [hwdata, ip_header, tcp_header, ip_options, tcp_options, data] = packet;
   sf::IpAddress target;
   StackRef* ref = m_network_ref.GetTCPSlot(tcp_header.source_port, tcp_header.destination_port,
-                                           std::bit_cast<u32>(ip_header.destination_addr));
+                                           Common::BitCast<u32>(ip_header.destination_addr));
   const u16 flags = ntohs(tcp_header.properties) & 0xfff;
   if (flags & (TCP_FLAG_FIN | TCP_FLAG_RST))
   {
@@ -384,16 +384,16 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleTCPFrame(const Common::TCPPacket& 
     ref->type = IPPROTO_TCP;
     for (auto& tcp_buf : ref->tcp_buffers)
       tcp_buf.used = false;
-    const u32 destination_ip = std::bit_cast<u32>(ip_header.destination_addr);
+    const u32 destination_ip = Common::BitCast<u32>(ip_header.destination_addr);
     ref->from.sin_addr.s_addr = destination_ip;
     ref->from.sin_port = tcp_header.destination_port;
-    ref->to.sin_addr.s_addr = std::bit_cast<u32>(ip_header.source_addr);
+    ref->to.sin_addr.s_addr = Common::BitCast<u32>(ip_header.source_addr);
     ref->to.sin_port = tcp_header.source_port;
     ref->bba_mac = m_current_mac;
     ref->my_mac = ResolveAddress(destination_ip);
     ref->tcp_socket.setBlocking(false);
     ref->ready = false;
-    ref->ip = std::bit_cast<u32>(ip_header.destination_addr);
+    ref->ip = Common::BitCast<u32>(ip_header.destination_addr);
 
     target = sf::IpAddress(ntohl(destination_ip));
     ref->tcp_socket.Connect(target, ntohs(tcp_header.destination_port), m_current_ip);
@@ -490,7 +490,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleUDPFrame(const Common::UDPPacket& 
   sf::IpAddress target;
   const u32 destination_addr = ip_header.destination_addr == Common::IP_ADDR_ANY ?
                                    m_router_ip :  // dns request
-                                   std::bit_cast<u32>(ip_header.destination_addr);
+                                   Common::BitCast<u32>(ip_header.destination_addr);
 
   StackRef* ref = m_network_ref.GetAvailableSlot(udp_header.source_port);
   if (ref->ip == 0)
@@ -503,7 +503,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleUDPFrame(const Common::UDPPacket& 
     ref->my_mac = m_router_mac;
     ref->from.sin_addr.s_addr = destination_addr;
     ref->from.sin_port = udp_header.destination_port;
-    ref->to.sin_addr.s_addr = std::bit_cast<u32>(ip_header.source_addr);
+    ref->to.sin_addr.s_addr = Common::BitCast<u32>(ip_header.source_addr);
     ref->to.sin_port = udp_header.source_port;
     ref->udp_socket.setBlocking(false);
     if (ref->udp_socket.Bind(ntohs(udp_header.source_port), m_current_ip) != sf::Socket::Done)
@@ -523,7 +523,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleUDPFrame(const Common::UDPPacket& 
         reply.eth_header.destination = hwdata.source;
         reply.eth_header.source = hwdata.destination;
         reply.ip_header.destination_addr = ip_header.source_addr;
-        reply.ip_header.source_addr = std::bit_cast<Common::IPAddress>(destination_addr);
+        reply.ip_header.source_addr = Common::BitCast<Common::IPAddress>(destination_addr);
         WriteToQueue(reply.Build());
       }
     }
@@ -531,7 +531,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleUDPFrame(const Common::UDPPacket& 
   if (ntohs(udp_header.destination_port) == 53)
     target = sf::IpAddress(m_dns_ip.c_str());  // dns server ip
   else
-    target = sf::IpAddress(ntohl(std::bit_cast<u32>(ip_header.destination_addr)));
+    target = sf::IpAddress(ntohl(Common::BitCast<u32>(ip_header.destination_addr)));
   ref->udp_socket.send(data.data(), data.size(), target, ntohs(udp_header.destination_port));
 }
 
@@ -966,7 +966,7 @@ sf::Socket::Status BbaUdpSocket::Bind(u16 port, u32 net_ip)
   // Subscribe to the SSDP multicast group
   // NB: Other groups aren't supported because of HLE
   ip_mreq mreq;
-  mreq.imr_multiaddr.s_addr = std::bit_cast<u32>(Common::IP_ADDR_SSDP);
+  mreq.imr_multiaddr.s_addr = Common::BitCast<u32>(Common::IP_ADDR_SSDP);
   mreq.imr_interface.s_addr = net_ip;
   if (setsockopt(getHandle(), IPPROTO_IP, IP_ADD_MEMBERSHIP, reinterpret_cast<const char*>(&mreq),
                  sizeof(mreq)) != 0)

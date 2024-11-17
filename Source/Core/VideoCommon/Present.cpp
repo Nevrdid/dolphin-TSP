@@ -258,31 +258,31 @@ void Presenter::ProcessFrameDumping(u64 ticks) const
       break;
     }
     }
-
-    int width = target_rect.GetWidth();
-    int height = target_rect.GetHeight();
-
-    const int resolution_lcm = g_frame_dumper->GetRequiredResolutionLeastCommonMultiple();
-
-    // Ensure divisibility by the dumper LCM and a min of 1 to make it compatible with all the
-    // video encoders. Note that this is theoretically only necessary when recording videos and not
-    // screenshots.
-    // We always scale positively to make sure the least amount of information is lost.
     //
-    // TODO: this should be added as black padding on the edges by the frame dumper.
-    if ((width % resolution_lcm) != 0 || width == 0)
-      width += resolution_lcm - (width % resolution_lcm);
-    if ((height % resolution_lcm) != 0 || height == 0)
-      height += resolution_lcm - (height % resolution_lcm);
-
-    // Remove any black borders, there would be no point in including them in the recording
-    target_rect.left = 0;
-    target_rect.top = 0;
-    target_rect.right = width;
-    target_rect.bottom = height;
-
-    // TODO: any scaling done by this won't be gamma corrected,
-    // we should either apply post processing as well, or port its gamma correction code
+    // int width = target_rect.GetWidth();
+    // int height = target_rect.GetHeight();
+    //
+    // const int resolution_lcm = g_frame_dumper->GetRequiredResolutionLeastCommonMultiple();
+    //
+    // // Ensure divisibility by the dumper LCM and a min of 1 to make it compatible with all the
+    // // video encoders. Note that this is theoretically only necessary when recording videos and not
+    // // screenshots.
+    // // We always scale positively to make sure the least amount of information is lost.
+    // //
+    // // TODO: this should be added as black padding on the edges by the frame dumper.
+    // if ((width % resolution_lcm) != 0 || width == 0)
+    //   width += resolution_lcm - (width % resolution_lcm);
+    // if ((height % resolution_lcm) != 0 || height == 0)
+    //   height += resolution_lcm - (height % resolution_lcm);
+    //
+    // // Remove any black borders, there would be no point in including them in the recording
+    // target_rect.left = 0;
+    // target_rect.top = 0;
+    // target_rect.right = width;
+    // target_rect.bottom = height;
+    //
+    // // TODO: any scaling done by this won't be gamma corrected,
+    // // we should either apply post processing as well, or port its gamma correction code
     g_frame_dumper->DumpCurrentFrame(m_xfb_entry->texture.get(), m_xfb_rect, target_rect, ticks,
                                      m_frame_count);
   }
@@ -529,23 +529,52 @@ u32 Presenter::AutoIntegralScale() const
   // by a integer multiplier until it won't have to be scaled up anymore.
   // NOTE: this might conflict with "Config::MAIN_RENDER_WINDOW_AUTOSIZE",
   // as they mutually influence each other.
-  u32 source_width = m_last_xfb_width;
-  u32 source_height = m_last_xfb_height;
-  const u32 target_width = m_target_rectangle.GetWidth();
-  const u32 target_height = m_target_rectangle.GetHeight();
-  const float source_aspect_ratio = (float)source_width / source_height;
-  const float target_aspect_ratio = (float)target_width / target_height;
-  if (source_aspect_ratio >= target_aspect_ratio)
-    source_width = std::round(source_height * target_aspect_ratio);
+  //
+  // u32 source_width = m_last_xfb_width;
+  // u32 source_height = m_last_xfb_height;
+  // const u32 target_width = m_target_rectangle.GetWidth();
+  // const u32 target_height = m_target_rectangle.GetHeight();
+  // const float source_aspect_ratio = (float)source_width / source_height;
+  // const float target_aspect_ratio = (float)target_width / target_height;
+  // if (source_aspect_ratio >= target_aspect_ratio)
+  //   source_width = std::round(source_height * target_aspect_ratio);
+  // else
+  //   source_height = std::round(source_width / target_aspect_ratio);
+  // const u32 width_scale =
+  //     source_width > 0 ? ((target_width + (source_width - 1)) / source_width) : 1;
+  // const u32 height_scale =
+  //     source_height > 0 ? ((target_height + (source_height - 1)) / source_height) : 1;
+  // // Limit to the max to avoid creating textures larger than their max supported resolution.
+  // return std::min(std::max(width_scale, height_scale),
+  //                 static_cast<u32>(Config::Get(Config::GFX_MAX_EFB_SCALE)));
+   const float efb_aspect_ratio = static_cast<float>(EFB_WIDTH) / EFB_HEIGHT;
+  const float target_aspect_ratio =
+      static_cast<float>(m_target_rectangle.GetWidth()) / m_target_rectangle.GetHeight();
+
+  u32 target_width;
+  u32 target_height;
+
+  // Adjust for black bars while handling fractional scaling
+  if (target_aspect_ratio >= efb_aspect_ratio)
+  {
+    target_height = m_target_rectangle.GetHeight() * 100;  // Account for fractional scaling
+    target_width = static_cast<u32>(
+        std::round((static_cast<float>(m_target_rectangle.GetWidth()) / target_aspect_ratio) *
+                   efb_aspect_ratio * 100));  // Account for fractional scaling
+  }
   else
-    source_height = std::round(source_width / target_aspect_ratio);
-  const u32 width_scale =
-      source_width > 0 ? ((target_width + (source_width - 1)) / source_width) : 1;
-  const u32 height_scale =
-      source_height > 0 ? ((target_height + (source_height - 1)) / source_height) : 1;
-  // Limit to the max to avoid creating textures larger than their max supported resolution.
-  return std::min(std::max(width_scale, height_scale),
-                  static_cast<u32>(Config::Get(Config::GFX_MAX_EFB_SCALE)));
+  {
+    target_width = m_target_rectangle.GetWidth() * 100;  // Account for fractional scaling
+    target_height = static_cast<u32>(
+        std::round((static_cast<float>(m_target_rectangle.GetHeight()) * target_aspect_ratio) /
+                   efb_aspect_ratio * 100));  // Account for fractional scaling
+  }
+
+  // Calculate a scale based on the adjusted window size with fractional scaling in mind
+  u32 width = EFB_WIDTH * target_width / m_last_xfb_width;
+  u32 height = EFB_HEIGHT * target_height / m_last_xfb_height;
+
+  return std::max((width - 1) / (EFB_WIDTH * 100) + 1, (height - 1) / (EFB_HEIGHT * 100) + 1);
 }
 
 void Presenter::SetSuggestedWindowSize(int width, int height)

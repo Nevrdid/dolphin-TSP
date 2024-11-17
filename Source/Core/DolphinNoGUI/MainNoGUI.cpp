@@ -174,8 +174,10 @@ static std::unique_ptr<Platform> GetPlatform(const optparse::Values& options)
 #endif
 
 #ifdef __linux__
-  if (platform_name == "fbdev" || platform_name.empty())
+  if (platform_name == "fbdev")
     return Platform::CreateFBDevPlatform();
+  if (platform_name == "sdl" || platform_name.empty())
+    return Platform::CreateSDLPlatform();
 #endif
 
 #ifdef _WIN32
@@ -209,6 +211,7 @@ int main(int argc, char* argv[])
         "headless"
 #ifdef __linux__
             ,
+            "sdl",
             "fbdev"
 #endif
 #if HAVE_X11

@@ -7,6 +7,9 @@
 #include <EGL/eglext.h>
 #include <string>
 #include <vector>
+#if defined(HAVE_SDL2)
+#include <SDL.h>
+#endif
 
 #include "Common/GL/GLContext.h"
 
@@ -41,6 +44,7 @@ protected:
   void DestroyContext();
 
   WindowSystemInfo m_wsi = {};
+  SDL_Window * m_sdl_window;
 
   EGLConfig m_config;
   bool m_supports_surfaceless = false;
